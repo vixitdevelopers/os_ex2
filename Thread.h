@@ -19,11 +19,13 @@ class Thread
   char _stack[STACK_SIZE];
   thread_entry_point _entry_point;
   int _quantum_usecs;
+
   State _state;
   sigjmp_buf _env;
  public:
-    Thread(sigjmp_buf env,thread_entry_point entry_point,int id);
+  Thread (sigjmp_buf env, thread_entry_point entry_point, int id);
   static int num_of_threads;
+  State get_state();
 };
 
 #endif //_THREAD_H_

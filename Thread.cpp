@@ -12,3 +12,9 @@ Thread::Thread (sigjmp_buf env, thread_entry_point entry_point, int id)
   _tid = id;
 
 }
+int Thread::num_of_threads = 0;
+
+State Thread::get_state ()
+{
+  return _state;
+}
