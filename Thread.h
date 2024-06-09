@@ -27,7 +27,9 @@ class Thread
   static int num_of_threads;
   State get_state ();
   void set_state (State state);
+  sigjmp_buf &get_env ();
   int get_id ();
+  const char *get_stack () const;
 };
 
 #endif //_THREAD_H_
