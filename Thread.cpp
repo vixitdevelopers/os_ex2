@@ -18,3 +18,11 @@ State Thread::get_state ()
 {
   return _state;
 }
+void Thread::set_state (State state)
+{
+  _state = state;
+}
+int Thread::get_id ()
+{
+  return _tid;
+}

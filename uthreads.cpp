@@ -2,12 +2,13 @@
 #include <memory>
 #include <queue>
 #include <csignal>
+#include <list>
 #include "uthreads.h"
 #include "Thread.h"
 
 //queue of ready threads:
 typedef std::shared_ptr<Thread> ThreadPtr;
-typedef std::deque<ThreadPtr> ThreadQueue;
+typedef std::list<std::shared_ptr<Thread>> ThreadQueue;
 
 static ThreadQueue readyThreads;
 // list of ids:
@@ -26,17 +27,6 @@ int get_min_id ()
     }
   }
   return -1;
-}
-
-void remove_from_queue (ThreadQueue queue, int tid)
-{
-  for (auto it = queue.begin (); it != queue.end (); ++it)
-  {
-    if ((*it)->get_id () == tid)
-    {
-      queue.erase (it);
-    }
-  }
 }
 
 int uthread_init (int quantum_usecs)
@@ -115,4 +105,39 @@ int uthread_get_quantums (int tid)
 int uthread_get_tid ()
 {
   return running_thread_id;
+}
+
+int uthread_resume (int tid)
+{
+  //todo block signals
+  if (!thread_list[tid])
+  {
+    //todo print stuff
+    return -1;
+  }
+  if (thread_list[tid]->get_state () == BLOCKED)
+  {
+    thread_list[tid]->set_state (READY);
+    readyThreads.push_back (thread_list[tid]);
+    //todo remove from blocked queue
+  }
+}
+
+void signal_handler (int sig)
+{
+  //todo block signals
+  switch (sig)
+  {
+    case SIGVTALRM:
+      // remove the current thread from the queue and push it to the end of
+      // the queue:
+      sigsetjmp (thread_list[running_thread_id]->get_env (), 0);//todo why 0?
+      //change status:
+      thread_list[running_thread_id]->set_state (READY);
+      readyThreads.push_back (thread_list[running_thread_id]);
+      running_thread_id = readyThreads.front ()->get_id ();
+      readyThreads.pop_front ();
+      // jump to the next thread:
+      siglongjmp (thread_list[running_thread_id]->get_env (), 1);
+  }
 }

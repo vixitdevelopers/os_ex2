@@ -25,7 +25,9 @@ class Thread
  public:
   Thread (sigjmp_buf env, thread_entry_point entry_point, int id);
   static int num_of_threads;
-  State get_state();
+  State get_state ();
+  void set_state (State state);
+  int get_id ();
 };
 
 #endif //_THREAD_H_
