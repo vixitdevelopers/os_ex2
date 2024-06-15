@@ -7,9 +7,22 @@
 #define _UTHREADS_H
 
 
-#define MAX_THREAD_NUM 100 /* maximal number of threads */
+#define MAX_THREAD_NUM 100 /* maximal number of threadList */
 #define STACK_SIZE 4096 /* stack size per thread (in bytes) */
+#define ERR_MSG_UTHREADS(text) \
+    std::cerr << "thread library error: " << text << std::endl;
 
+#define ERR_MSG_SYS(text) \
+    std::cerr << "system error: " << text << std::endl;
+
+#define EXIT_WITH_FAILURE (-1)
+#define EXIT_WITH_SUCCESS (0)
+#define ERR_ENTRY_POINT "entry point is invalid"
+#define ERR_MAX_THREADS_EXC "no available threads left"
+#define ERR_SIGEMPTYSET "sigemptyset failed"
+#define ERR_ID_NUM_ILLEGAL "illegal id number"
+#define ERR_NO_THREAD_WITH_ID "thread does not exist"
+#define ERR_SLEEP_MAIN_THREAD "Main thread can't sleep"
 typedef void (*thread_entry_point)(void);
 
 /* External interface */
@@ -33,8 +46,8 @@ int uthread_init(int quantum_usecs);
  * @brief Creates a new thread, whose entry point is the function entry_point with the signature
  * void entry_point(void).
  *
- * The thread is added to the end of the READY threads list.
- * The uthread_spawn function should fail if it would cause the number of concurrent threads to exceed the
+ * The thread is added to the end of the READY threadList list.
+ * The uthread_spawn function should fail if it would cause the number of concurrent threadList to exceed the
  * limit (MAX_THREAD_NUM).
  * Each thread should be allocated with a stack of size STACK_SIZE bytes.
  * It is an error to call this function with a null entry_point.
@@ -85,7 +98,7 @@ int uthread_resume(int tid);
  *
  * Immediately after the RUNNING thread transitions to the BLOCKED state a scheduling decision should be made.
  * After the sleeping time is over, the thread should go back to the end of the READY queue.
- * If the thread which was just RUNNING should also be added to the READY queue, or if multiple threads wake up 
+ * If the thread which was just RUNNING should also be added to the READY queue, or if multiple threadList wake up
  * at the same time, the order in which they're added to the end of the READY queue doesn't matter.
  * The number of quantums refers to the number of times a new quantum starts, regardless of the reason. Specifically,
  * the quantum of the thread which has made the call to uthread_sleep isn’t counted.

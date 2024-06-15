@@ -1,259 +1,198 @@
-
+#include "avichai.h"
+#include <iostream>
+#include "uthreads.h"
 #include <memory>
-#include <queue>
-#include <csignal>
 #include <list>
-#include <iostream>
-#include "uthreads.h"
-#include "Thread.h"
-#include <iostream>
-#include "uthreads.h"
-#include <queue>
-#include "vector"
-#include <list>
-#include "memory"
+#include "Scheduler.h"
 #include <setjmp.h>
 #include <signal.h>
-#include <sys/time.h>
-#include <cstdlib>
+
 #define JB_SP 6
 #define JB_PC 7
-//queue of ready threads:
-typedef std::shared_ptr<Thread> ThreadPtr;
-typedef std::list<std::shared_ptr<Thread>> ThreadQueue;
+#define STACK_SIZE 4096
 
-static ThreadQueue readyThreads;
-// list of ids:
-static std::vector<ThreadPtr> thread_list;
-static int running_thread_id = 0;
-static int total_quantum = 0;
-static int quantum_len = 0;
-static struct itimerval timer;
-struct sigaction sa{};
-sigset_t set;
-// get the first available id:
-void timer_signal_handler (int sig);
-int get_min_id ()
+address_t translate_address (address_t addr)
 {
-  for (int i = 0; i < thread_list.size (); i++)
-  {
-    if (!thread_list[i])
-    {
-      return i;
-    }
-  }
-  return -1;
+  address_t ret;
+  asm volatile("xor    %%fs:0x30,%0\n"
+               "rol    $0x11,%0\n"
+      : "=g" (ret)
+      : "0" (addr));
+  return ret;
 }
-void block_signals ()
-{
-  sigset_t mask;
-  if (sigfillset (&mask))
-  {
-    std::cerr << "system error: " << "sigfillset failed" << std::endl;
-  }
-  if (sigprocmask (SIG_SETMASK, &mask, NULL))
-  {
-    std::cerr << "system error: " << "sigprocmask failed" << std::endl;
-  }
-}
-
-void unblock_signals ()
-{
-  sigset_t mask;
-  if (sigemptyset (&mask))
-  {
-    std::cerr << "system error: " << "sigemptyset failed" << std::endl;
-  }
-  if (sigprocmask (SIG_SETMASK, &mask, NULL))
-  {
-    std::cerr << "system error: " << "sigprocmask failed" << std::endl;
-  }
-}
-int start_timer()
-{
-  struct itimerval timer;
-  timer.it_value.tv_sec = 0;
-  timer.it_value.tv_usec = quantum_len;
-
-  timer.it_interval.tv_sec = 0;
-  timer.it_interval.tv_usec = quantum_len;
-  if (setitimer(ITIMER_VIRTUAL, &timer, NULL))
-  {
-    //todo print error
-    return -1;
-  }
-  return 0;
-}
-
 
 int uthread_init (int quantum_usecs)
 {
-  quantum_len = quantum_usecs;
-  thread_list = std::vector<ThreadPtr> (MAX_THREAD_NUM);
-  readyThreads = ThreadQueue ();
-  sa.sa_handler = &timer_signal_handler;
-  if (sigaction (SIGVTALRM, &sa, nullptr) < 0)
+  if (quantum_usecs <= 0)
   {
-    std::cerr << "system error: couldn't apply sig action" << std::endl;
-    //todo is this what we want to print?
-    exit (1);
+    std::cerr
+        << "thread library error: Can't initialize uthreads with non-positive value"
+        << std::endl;
+    return -1;
   }
-  // block the alarm signal because we dont have any threads yet:
-
-//  if (sigemptyset (&set))
-//  {
-//    std::cerr << "system error: couldn't empty set to set" << std::endl;
-//    exit (1);
-//  }
-//  if (sigaddset (&set, SIGVTALRM))
-//  {
-//    std::cerr << "system error: couldn't add to set" << std::endl;
-//    exit (1);
-//  }
-  timer.it_value.tv_sec = (long) (quantum_usecs / (int) 10e6);
-  timer.it_value.tv_usec = (long) (quantum_usecs % (int) 10e6);
-  timer.it_interval.tv_sec = (long) (quantum_usecs / (int) 10e6);
-  timer.it_interval.tv_usec = (long) (quantum_usecs % (int) 10e6);
-
-  thread_list[0] = std::make_shared<Thread> (nullptr, nullptr, 0);
-  thread_list[0]->set_state (RUNNING);
-  running_thread_id = 0;
-  if(setitimer(ITIMER_VIRTUAL, &timer, nullptr)){
-    std::cerr  << "system error: couldn't set timer" << std::endl;
-    exit(1);
-  }
+  threadManager = std::make_unique<Scheduler> (quantum_usecs);
   return 0;
 }
 
 int uthread_spawn (thread_entry_point entry_point)
 {
-  // todo: add blocking of signals
-  block_signals();
-  // check if entry point is not null:
-  if (!entry_point)
+  blockTimerSignal ();
+  int availble_id = threadManager->get_min_id ();
+  if (entry_point == nullptr)
   {
-    // todo print shit
-    return -1;
+    ERR_MSG_UTHREADS(ERR_ENTRY_POINT);
+    return EXIT_WITH_FAILURE;
   }
-  // check if exceedes max threads:
-  if (Thread::num_of_threads >= MAX_THREAD_NUM)
+  if (availble_id == NONE_AVAILBLE)
   {
-    // todo : print some shit
-    return -1;
+    ERR_MSG_UTHREADS(ERR_MAX_THREADS_EXC);
+    return EXIT_WITH_FAILURE;;
   }
-
-  // get stack buffer:
-
-  sigjmp_buf buf;
-  sigsetjmp(buf, 1);
-  if (sigemptyset (&(buf->__saved_mask)))
+  std::shared_ptr<Thread> newThread (new Thread (availble_id));
+  sigsetjmp(*newThread->get_buf (), 1);
+  ((*newThread->get_buf ())->__jmpbuf)[JB_SP] = translate_address (
+      (address_t) newThread->get_stack () + STACK_SIZE - sizeof (address_t));
+  ((*newThread->get_buf ())->__jmpbuf)[JB_PC] = translate_address (
+      (address_t)
+          entry_point);
+  if (sigemptyset (&((*newThread->get_buf ())->__saved_mask)))
   {
-    std::cerr << "system error: couldn't empty set" << std::endl;
-    exit (1);
+    ERR_MSG_SYS(ERR_SIGEMPTYSET);
+    EXIT_WITH_FAILURE;
   }
-
-  int id = get_min_id ();
-  ThreadPtr thread_ptr = std::make_shared<Thread> (buf, entry_point, id);
-  thread_ptr->set_state (READY);
-  readyThreads.push_back (thread_ptr);
-  thread_list[id] = thread_ptr;
-
-  //todo unblock signals
-  unblock_signals();
-  return id;
+  threadManager->threadList[newThread->get_id ()] = newThread;
+  threadManager->readyList->push_back (newThread);
+  unblockTimerSignal ();
+  return newThread->get_id ();
 }
 
-void jmp_to_next_thread ()
-{
-  block_signals ();
-  ThreadPtr next_thread = readyThreads.front ();
-  readyThreads.pop_front ();
-  next_thread->set_state (RUNNING);
-  running_thread_id = next_thread->get_id ();
-  // todo reset timer
-
-  unblock_signals ();
-  siglongjmp (next_thread->get_env (), 1);
-}
 int uthread_terminate (int tid)
 {
-  // todo block signals
-
-  if (!thread_list[tid])
+  blockTimerSignal ();
+  if (tid < MIN_ID || tid >= MAX_THREAD_NUM)
   {
-    //todo print stuff
+    ERR_MSG_UTHREADS(ERR_ID_NUM_ILLEGAL);
+    unblockTimerSignal ();
+    return EXIT_WITH_FAILURE;
+  }
+  if (tid == MAIN_THREAD_ID)
+  {
+    //this should kill all the threads:
+    threadManager = nullptr;
+    return EXIT_WITH_SUCCESS;
+  }
+  if (threadManager->threadList[tid] == nullptr)
+  {
+    ERR_MSG_UTHREADS(ERR_NO_THREAD_WITH_ID);
+    return EXIT_WITH_FAILURE;
+  }
+  int cur_id = threadManager->runningThread->get_id ();
+  threadManager->readyList->remove (threadManager->threadList[tid]);
+  threadManager->threadList[tid] = nullptr;
+  if (cur_id == tid)
+  {
+    threadManager->nextThread ();
+  }
+  unblockTimerSignal ();
+  return EXIT_WITH_SUCCESS;
+}
+
+// ITAJ
+int uthread_block (int tid)
+{
+  if (tid < 0 || tid >= 100)
+  {
+    std::cerr << "thread library error: illegal id number" << std::endl;
     return -1;
   }
-  if (tid == 0)
+  if (tid == 0 || threadManager->threadList[tid] == nullptr)
   {
-    //todo main thread stuff
-    exit (0);
+    std::cerr
+        << "thread library error: No thread found with this id, or tried to block main"
+        << std::endl;
+    return -1;
   }
-
-  readyThreads.remove (thread_list[tid]);
-  // todo remove stack from heap
-  thread_list[tid] = nullptr;
-  if (running_thread_id == tid)
+  blockTimerSignal ();
+  threadManager->threadList[tid]->set_state (BLOCKED);
+  threadManager->readyList->remove (threadManager->threadList[tid]);
+  if (tid == threadManager->runningThread->get_id ())
   {
-    jmp_to_next_thread ();
+    int has_jumped = sigsetjmp(*threadManager->runningThread->get_buf (), 1);
+    if (has_jumped == 0)
+    {
+      threadManager->nextThread ();
+    }
   }
-
+  unblockTimerSignal ();
   return 0;
+}
+
+// ITAJ
+int uthread_resume (int tid)
+{
+  if (tid < 0 || tid >= 100)
+  {
+    std::cerr << "thread library error: illegal id number" << std::endl;
+    return -1;
+  }
+  if (threadManager->threadList[tid] == nullptr)
+  {
+    std::cerr << "thread library error: No thread found with this id"
+              << std::endl;
+    return -1;
+  }
+  if (threadManager->threadList[tid]->get_state () == RUNNING
+      || threadManager->threadList[tid]->get_state () == READY)
+  {
+    return 0;
+  }
+  blockTimerSignal ();
+  threadManager->threadList[tid]->set_state (READY);
+  if (threadManager->threadList[tid]->get_sleep_timer () == AWAKE)
+  {
+    threadManager->readyList->push_back (threadManager->threadList[tid]);
+  }
+  unblockTimerSignal ();
+  return 0;
+}
+
+int uthread_sleep (int num_quantums)
+{
+  blockTimerSignal ();
+  if (threadManager->runningThread->get_id () == MAIN_THREAD_ID)
+  {
+    ERR_MSG_UTHREADS(ERR_SLEEP_MAIN_THREAD);
+    unblockTimerSignal ();
+    return EXIT_WITH_FAILURE;
+  }
+  threadManager->runningThread->set_sleep_timer (
+      uthread_get_total_quantums () + num_quantums);
+  threadManager->nextThread ();
+  unblockTimerSignal ();
+  return 0;
+}
+
+int uthread_get_tid ()
+{
+  return threadManager->runningThread->get_id ();
 }
 
 int uthread_get_total_quantums ()
 {
-  return total_quantum;
+  return threadManager->quantum_clock;
 }
 
 int uthread_get_quantums (int tid)
 {
-  if (!thread_list[tid])
+  if (tid < MIN_ID || tid >= MAX_THREAD_NUM)
   {
-    //todo print stuff
-    return -1;
+    ERR_MSG_UTHREADS(ERR_ID_NUM_ILLEGAL)
+    return EXIT_WITH_FAILURE;
   }
-  return 0;
-//  return thread_list[tid]->get_total_quantoms ();
-}
-int uthread_get_tid ()
-{
-  return running_thread_id;
-}
-
-int uthread_resume (int tid)
-{
-  //todo block signals
-  if (!thread_list[tid])
+  if (threadManager->threadList[tid] == nullptr)
   {
-    //todo print stuff
-    return -1;
+    ERR_MSG_UTHREADS(ERR_NO_THREAD_WITH_ID)
+    return EXIT_WITH_FAILURE;
   }
-  if (thread_list[tid]->get_state () == BLOCKED)
-  {
-    thread_list[tid]->set_state (READY);
-    readyThreads.push_back (thread_list[tid]);
-    //todo remove from blocked queue
-  }
-}
-
-void timer_signal_handler (int sig)
-{
-  printf ("timer signal handler\n");
-  switch (sig)
-  {
-    case SIGVTALRM:
-      // remove the current thread from the queue and push it to the end of
-      // the queue:
-      block_signals ();
-      sigsetjmp (thread_list[running_thread_id]->get_env (), 0);//todo why 0?
-      //change status:
-      thread_list[running_thread_id]->set_state (READY);
-      readyThreads.push_back (thread_list[running_thread_id]);
-      running_thread_id = readyThreads.front ()->get_id ();
-      readyThreads.pop_front ();
-      unblock_signals ();
-      // jump to the next thread:
-      siglongjmp (thread_list[running_thread_id]->get_env (), 1);
-  }
+  return (threadManager->threadList[tid])->get_quantom_counter ();
 }

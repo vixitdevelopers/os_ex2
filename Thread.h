@@ -7,29 +7,46 @@
 
 #include <csetjmp>
 #include "uthreads.h"
+#define AWAKE (-1)
+
 enum State
 {
-    READY, RUNNING, BLOCKED
+    READY,
+    RUNNING,
+    BLOCKED
 };
 
 class Thread
 {
  private:
-  int _tid;
-  char _stack[STACK_SIZE];
-  thread_entry_point _entry_point;
-  int _quantum_usecs;
-
+  int _id;
   State _state;
-  sigjmp_buf _env;
+  int _sleep_timer;
+  int _quantom_counter;
+  sigjmp_buf _buf;
+  char _stack[STACK_SIZE];
  public:
-  Thread (sigjmp_buf env, thread_entry_point entry_point, int id);
-  static int num_of_threads;
-  State get_state ();
-  void set_state (State state);
-  sigjmp_buf &get_env ();
-  int get_id ();
-  const char *get_stack () const;
+  explicit Thread (int id);
+  void increment_quantom ()
+  { _quantom_counter++; }
+  int get_id () const
+  { return _id; }
+  void set_quantum_counter (int quantum_passed)
+  { _quantom_counter = quantum_passed; }
+  void set_state (State state)
+  { _state = state; }
+  void set_sleep_timer (int sleep_timer)
+  { _sleep_timer = sleep_timer; }
+  int get_sleep_timer () const
+  { return _sleep_timer; }
+  State get_state () const
+  { return _state; }
+  sigjmp_buf *get_buf ()
+  { return &_buf; }
+  char *get_stack ()
+  { return _stack; }
+  int get_quantom_counter () const
+  { return _quantom_counter; }
 };
 
 #endif //_THREAD_H_
