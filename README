@@ -1,0 +1,37 @@
+Q1:
+a. sigsetjmp(): This function saves the current environment state into a specified buffer.
+If called directly, it returns 0. When returning from a call to siglongjmp(), it returns a non-zero value.
+siglongjmp(): This function restores the state saved by sigsetjmp() for the same thread.
+If there is no corresponding invocation or if the function containing the sigsetjmp() call has terminated,
+the behavior is undefined.
+The second parameter provided to siglongjmp() will be returned by sigsetjmp() if it is invoked by siglongjmp().
+b. If the second argument of sigsetjmp() is non-zero, the current signal mask will be saved as part of the
+environment state.
+
+Q2:
+An example of usage is when developing a program that requires threads and might run on an operating system that
+doesn't support them.
+Using user-level threads is practical in this scenario because your program needs threading capabilities,
+and if the OS lacks this support, the program would not function correctly.
+
+Q3:
+Advantages:
+1. Security: If one tab is compromised by a virus, it is more challenging for the virus to access information
+in other tabs.
+2. Concurrency: If one tab becomes unresponsive, it does not affect the performance of other tabs.
+
+Disadvantages:
+1. Communication Overhead: Inter-process communication requires a switch to the kernel, which is time-consuming.
+2. Process Creation Overhead: Creating a new process takes more time than creating a new thread.
+
+Q4:
+During the execution of the command, hardware interrupts are triggered by the keyboard and mouse movements.
+Opening Shotwell and running ps and kill commands involve system calls to create processes,
+which are implemented using interrupts.
+The kill command uses the kill system call, triggering a software interrupt to terminate the application.
+
+Q5:
+Real-time is measured by the CPU clock regardless of which process is running,
+while virtual time is measured only when a specific process is executing.
+Additionally, virtual time is defined by the process using a timer with a custom interval,
+whereas real-time is continuously measured.

@@ -1,4 +1,3 @@
-#include "avichai.h"
 #include <iostream>
 #include "uthreads.h"
 #include <memory>
@@ -97,19 +96,16 @@ int uthread_terminate (int tid)
   return EXIT_WITH_SUCCESS;
 }
 
-// ITAJ
 int uthread_block (int tid)
 {
   if (tid < 0 || tid >= 100)
   {
-    std::cerr << "thread library error: illegal id number" << std::endl;
+    ERR_MSG_UTHREADS(ERR_ILLEGAL_ID);
     return -1;
   }
   if (tid == 0 || threadManager->threadList[tid] == nullptr)
   {
-    std::cerr
-        << "thread library error: No thread found with this id, or tried to block main"
-        << std::endl;
+    ERR_MSG_UTHREADS(ERR_NO_THREAD_FOUND);
     return -1;
   }
   blockTimerSignal ();
@@ -117,8 +113,7 @@ int uthread_block (int tid)
   threadManager->readyList->remove (threadManager->threadList[tid]);
   if (tid == threadManager->runningThread->get_id ())
   {
-    int has_jumped = sigsetjmp(*threadManager->runningThread->get_buf (), 1);
-    if (has_jumped == 0)
+    if (sigsetjmp(*threadManager->runningThread->get_buf(), 1) == 0)
     {
       threadManager->nextThread ();
     }
@@ -127,28 +122,27 @@ int uthread_block (int tid)
   return 0;
 }
 
-// ITAJ
 int uthread_resume (int tid)
 {
   if (tid < 0 || tid >= 100)
   {
-    std::cerr << "thread library error: illegal id number" << std::endl;
+    ERR_MSG_UTHREADS(ERR_ILLEGAL_ID);
     return -1;
   }
   if (threadManager->threadList[tid] == nullptr)
   {
-    std::cerr << "thread library error: No thread found with this id"
-              << std::endl;
+    ERR_MSG_UTHREADS(ERR_NO_THREAD_FOUND);
     return -1;
   }
-  if (threadManager->threadList[tid]->get_state () == RUNNING
-      || threadManager->threadList[tid]->get_state () == READY)
+  auto state = threadManager->threadList[tid]->get_state();
+  if (state == RUNNING || state == READY)
   {
     return 0;
   }
   blockTimerSignal ();
   threadManager->threadList[tid]->set_state (READY);
-  if (threadManager->threadList[tid]->get_sleep_timer () == AWAKE)
+  auto sleep_timer = threadManager->threadList[tid]->get_sleep_timer();
+  if (sleep_timer == AWAKE)
   {
     threadManager->readyList->push_back (threadManager->threadList[tid]);
   }

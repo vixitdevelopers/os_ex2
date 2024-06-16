@@ -23,6 +23,10 @@
 #define ERR_ID_NUM_ILLEGAL "illegal id number"
 #define ERR_NO_THREAD_WITH_ID "thread does not exist"
 #define ERR_SLEEP_MAIN_THREAD "Main thread can't sleep"
+#define ERR_ILLEGAL_ID "illegal id number"
+#define ERR_NO_THREAD_FOUND "No thread found with this id, or tried to block main"
+
+
 typedef void (*thread_entry_point)(void);
 
 /* External interface */
