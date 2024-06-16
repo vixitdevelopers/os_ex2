@@ -1,5 +1,7 @@
 #include "Scheduler.h"
 
+
+
 Scheduler::Scheduler (int quantum_time)
 {
   threadList = std::vector<ThreadPtr> (MAX_THREAD_NUM);
@@ -7,30 +9,30 @@ Scheduler::Scheduler (int quantum_time)
   sa.sa_handler = &Scheduler::timer_handler;
   if (sigaction (SIGVTALRM, &sa, nullptr) < 0)
   {
-    std::cerr << "system error: couldn't apply sig action" << std::endl;
-    exit (1);
+    ERR_MSG_SYS(ERR_SIGEMPTYACTION);
+    EXIT_WITH_FAILURE;
   }
   if (sigemptyset (&set) || sigaddset (&set, SIGVTALRM))
   {
-    std::cerr << "system error: couldn't empty set/add to set" << std::endl;
-    exit (1);
+    ERR_MSG_SYS(ERR_SIGEMPTYSET);
+    EXIT_WITH_FAILURE;
   }
   timer.it_value.tv_sec = (long) (quantum_time / (int) MICROSECONDS_TO_SECONDS);
   timer.it_value.tv_usec = (long) (quantum_time % (int) MICROSECONDS_TO_SECONDS);
   timer.it_interval.tv_sec = (long) (quantum_time / (int) MICROSECONDS_TO_SECONDS);
   timer.it_interval.tv_usec = (long) (quantum_time % (int) MICROSECONDS_TO_SECONDS);
-  threadList[0] = std::make_shared<Thread> (0);
+  threadList[0] = std::make_shared<Thread> (MAIN_THREAD_ID);
   threadList[0]->set_state (RUNNING);
   threadList[0]->set_quantum_counter (1);
-  runningThread = threadList[0];
+  runningThread = threadList[MAIN_THREAD_ID];
   for (int i = 1; i < MAX_THREAD_NUM; i++)
   {
     threadList[i] = nullptr;
   }
   if (setitimer (ITIMER_VIRTUAL, &timer, nullptr))
   {
-    std::cerr << "system error: couldn't set timer" << std::endl;
-    exit (1);
+    ERR_MSG_SYS(ERR_SETITIMER);
+    EXIT_WITH_FAILURE;
   }
 }
 void Scheduler::wake_up_threads ()
@@ -41,9 +43,8 @@ void Scheduler::wake_up_threads ()
     {
       continue;
     }
-    if (threadList[i]->get_sleep_timer () == quantum_clock)
+    if (threadList[i]->get_sleep_timer () == quantom_total)
     {
-      std::cout << "waking up: " << i << std::endl;
       threadList[i]->set_sleep_timer (AWAKE);
       if (threadList[i]->get_state () != BLOCKED)
       {
@@ -68,7 +69,7 @@ void Scheduler::nextThread ()
   {
     readyList->push_back (runningThread);
   }
-  quantum_clock += 1;
+  quantom_total += 1;
   wake_up_threads();
   runningThread->set_state ( runningThread->get_state() == RUNNING ? READY :
                              BLOCKED);
@@ -78,8 +79,8 @@ void Scheduler::nextThread ()
   runningThread->increment_quantom();
   if (setitimer (ITIMER_VIRTUAL, &timer, nullptr))
   {
-    std::cerr << "system error: couldn't set timer" << std::endl;
-    exit (1);
+    ERR_MSG_SYS(ERR_SETITIMER);
+    EXIT_WITH_FAILURE;
   }
   unblockTimerSignal ();
   siglongjmp (*runningThread->get_buf(), 1);

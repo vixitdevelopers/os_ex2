@@ -14,8 +14,11 @@
 #include <cstdlib>
 
 #define NONE_AVAILBLE (-1)
+#define FAILED (-1)
 #define MAIN_THREAD_ID 0
 #define MIN_ID 0
+#define ERR_SETITIMER "Error: setitimer failed"
+#define ERR_SIGEMPTYACTION "Error: sigemptyaction failed"
 
 #define MICROSECONDS_TO_SECONDS 1000000
 typedef unsigned long address_t;
@@ -23,17 +26,20 @@ typedef unsigned long address_t;
 inline void blockTimerSignal ()
 {
   sigset_t set;
-  if (sigemptyset (&set) == -1)
+  if (sigemptyset (&set) == FAILED)
   {
-    printf ("mkcdmsalcmdsla");
+    ERR_MSG_SYS(ERR_SETITIMER);
+    EXIT_WITH_FAILURE;
   }
-  if (sigaddset (&set, SIGVTALRM) == -1)
+  if (sigaddset (&set, SIGVTALRM) == FAILED)
   {
-    printf ("cndsanckl");
+    ERR_MSG_SYS(ERR_SETITIMER);
+    EXIT_WITH_FAILURE;
   }
   if (sigprocmask (SIG_BLOCK, &set, nullptr) == -1)
   {
-    printf ("cdsam c");
+    ERR_MSG_SYS(ERR_SETITIMER);
+    EXIT_WITH_FAILURE;
   }
 }
 
@@ -43,17 +49,20 @@ inline void blockTimerSignal ()
 inline void unblockTimerSignal ()
 {
   sigset_t set;
-  if (sigemptyset (&set) == -1)
+  if (sigemptyset (&set) == FAILED)
   {
-    printf ("cmlksamd");
+    ERR_MSG_SYS(ERR_SETITIMER);
+    EXIT_WITH_FAILURE;
   }
-  if (sigaddset (&set, SIGVTALRM) == -1)
+  if (sigaddset (&set, SIGVTALRM) == FAILED)
   {
-    printf ("cndsajncjd");
+    ERR_MSG_SYS(ERR_SETITIMER);
+    EXIT_WITH_FAILURE;
   }
-  if (sigprocmask (SIG_UNBLOCK, &set, nullptr) == -1)
+  if (sigprocmask (SIG_UNBLOCK, &set, nullptr) == FAILED)
   {
-    printf ("cmsamkmkc");
+    ERR_MSG_SYS(ERR_SETITIMER);
+    EXIT_WITH_FAILURE;
   }
 }
 typedef std::shared_ptr<Thread> ThreadPtr;
@@ -62,10 +71,10 @@ inline std::unique_ptr<Scheduler> threadManager;
 class Scheduler
 {
  public :
-  int quantum_clock = 1;
   std::unique_ptr<std::list<ThreadPtr>> readyList;
   std::vector<ThreadPtr> threadList;
   std::shared_ptr<Thread> runningThread;
+  int quantom_total = 1;
   struct itimerval timer;
   struct sigaction sa{};
   sigset_t set;

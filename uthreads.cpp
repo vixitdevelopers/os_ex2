@@ -24,9 +24,7 @@ int uthread_init (int quantum_usecs)
 {
   if (quantum_usecs <= 0)
   {
-    std::cerr
-        << "thread library error: Can't initialize uthreads with non-positive value"
-        << std::endl;
+    ERR_MSG_UTHREADS(MSG_NEGATIVE_QUANTOM);
     return -1;
   }
   threadManager = std::make_unique<Scheduler> (quantum_usecs);
@@ -173,7 +171,7 @@ int uthread_get_tid ()
 
 int uthread_get_total_quantums ()
 {
-  return threadManager->quantum_clock;
+  return threadManager->quantom_total;
 }
 
 int uthread_get_quantums (int tid)

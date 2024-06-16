@@ -26,7 +26,7 @@
 #define ERR_ILLEGAL_ID "illegal id number"
 #define ERR_NO_THREAD_FOUND "No thread found with this id, or tried to block main"
 
-
+#define MSG_NEGATIVE_QUANTOM "Quantum must be positive"
 typedef void (*thread_entry_point)(void);
 
 /* External interface */
